@@ -1,3 +1,4 @@
+import torch
 
 from trans import *
 from data import *
@@ -13,6 +14,10 @@ if __name__=="__main__":
     for i in range(len(data)-31):
         xTrain.append(data[i:i+30])
         yTrain.append(data[i+31:i+32])
+    X_Pre=xTrain[len(xTrain)-3:len(xTrain)-2]
+    Y_Pre=yTrain[len(yTrain)-3:len(yTrain)-2]
+    xTrain=xTrain[:len(xTrain)-3]
+    yTrain=yTrain[:len(yTrain)-3]
     X_train = torch.tensor(np.array(xTrain), dtype=torch.float32)  # [N, seq_len, 3]
     Y_train = torch.tensor(np.array(yTrain), dtype=torch.float32)  # [N, pred_len, 3]
 
@@ -29,10 +34,10 @@ if __name__=="__main__":
         output_dim=num_features,
         seq_len=seq_len,
         pred_len=pred_len,
-        d_model=64,
-        nhead=4,
-        num_layers=3,
-        dim_feedforward=128,
+        d_model=128,
+        nhead=8,
+        num_layers=6,
+        dim_feedforward=256,
         dropout=0.1
     )
 
@@ -42,7 +47,7 @@ if __name__=="__main__":
 
     # 4. 简易训练循环 (10 个 Epoch 演示)
     model.train()
-    epochs = 100
+    epochs = 20
     dataset_size = X_train.size(0)
 
     print("\n--- 开始训练 ---")
@@ -70,3 +75,8 @@ if __name__=="__main__":
     # 4. 步骤：测试与模型推理演示
     # =====================================================================
     model.eval()
+    with torch.no_grad():
+        pre=model(torch.tensor(np.array(X_Pre), dtype=torch.float32))
+        print("XPre is",X_Pre)
+        print("pre is ",pre)
+        print("act is ",Y_Pre)
