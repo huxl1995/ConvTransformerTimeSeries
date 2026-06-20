@@ -1,5 +1,6 @@
 import torch
-
+from Dline import *
+from Dline1 import *
 from trans import *
 from data import *
 def loadData(path):
@@ -9,74 +10,51 @@ if __name__=="__main__":
     dstPath="data1.csv"
     convertData(oriPath,dstPath)
     data=loadData(dstPath)
-    xTrain=[]
-    yTrain=[]
-    for i in range(len(data)-31):
-        xTrain.append(data[i:i+30])
-        yTrain.append(data[i+31:i+32])
-    X_Pre=xTrain[len(xTrain)-3:len(xTrain)-2]
-    Y_Pre=yTrain[len(yTrain)-3:len(yTrain)-2]
-    xTrain=xTrain[:len(xTrain)-3]
-    yTrain=yTrain[:len(yTrain)-3]
-    X_train = torch.tensor(np.array(xTrain), dtype=torch.float32)  # [N, seq_len, 3]
-    Y_train = torch.tensor(np.array(yTrain), dtype=torch.float32)  # [N, pred_len, 3]
+    # 设定窗口参数
+    SEQ_LEN = 30  # 用过去 30 天的数据
+    PRED_LEN = 5  # 预测未来 5 天
+    trainData=data[:1500]
+    testData=data[1500:]
+    train_dataset = StockDataset(trainData, SEQ_LEN, PRED_LEN)
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 
-    print(f"训练集输入尺寸: {X_train.shape}")
-    print(f"训练集标签尺寸: {Y_train.shape}")
-    # 模拟超参数设置
-    batch_size = 16
-    seq_len = 30  # 历史输入 24 个时间步 (例如过去 24 小时)
-    pred_len = 1  # 预测未来 6 个时间步 (例如未来 6 小时)
-    num_features = 4  # 3维多维时间序列 (例如：温度、湿度、风速)
-    # 2. 实例化模型
-    model = TimeSeriesTransformerEncoder(
-        input_dim=num_features,
-        output_dim=num_features,
-        seq_len=seq_len,
-        pred_len=pred_len,
-        d_model=128,
-        nhead=8,
-        num_layers=6,
-        dim_feedforward=256,
-        dropout=0.1
-    )
-
-    # 3. 定义损失函数和优化器
+    # 1. 实例化模型、损失函数和优化器
+    model = DLinearForStock(seq_len=SEQ_LEN, pred_len=PRED_LEN, num_features=num_features)
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-    # 4. 简易训练循环 (10 个 Epoch 演示)
+    # 2. 训练循环
+    epochs = 10
     model.train()
-    epochs = 20
-    dataset_size = X_train.size(0)
 
-    print("\n--- 开始训练 ---")
     for epoch in range(epochs):
-        epoch_loss = 0.0
-        # 打乱数据
-        permutation = torch.randperm(dataset_size)
-
-        for i in range(0, dataset_size, batch_size):
-            indices = permutation[i:i + batch_size]
-            batch_x, batch_y = X_train[indices], Y_train[indices]
-
+        epoch_loss = 0
+        for batch_x, batch_y in train_loader:
+            # batch_x: [32, 30, 5], batch_y: [32, 5, 5]
             optimizer.zero_grad()
-            predictions = model(batch_x)
 
-            loss = criterion(predictions, batch_y)
+            # 预测
+            outputs = model(batch_x)
+
+            # 计算损失
+            loss = criterion(outputs, batch_y)
             loss.backward()
             optimizer.step()
 
-            epoch_loss += loss.item() * batch_x.size(0)
+            epoch_loss += loss.item()
 
-        print(f"Epoch [{epoch + 1}/{epochs}], MSE Loss: {epoch_loss / dataset_size:.4f}")
+        print(f"Epoch [{epoch + 1}/{epochs}], Loss: {epoch_loss / len(train_loader):.4f}")
 
-    # =====================================================================
-    # 4. 步骤：测试与模型推理演示
-    # =====================================================================
+    # 3. 模拟单次预测验证
     model.eval()
     with torch.no_grad():
-        pre=model(torch.tensor(np.array(X_Pre), dtype=torch.float32))
-        print("XPre is",X_Pre)
-        print("pre is ",pre)
-        print("act is ",Y_Pre)
+        # 模拟最近30天的股票真实数据
+        recent_30_days = torch.tensor(test_data[:SEQ_LEN], dtype=torch.float32).unsqueeze(
+            0)  # 增加 batch 维度 -> [1, 30, 5]
+
+        # 预测未来5天
+        future_5_days_pred = model(recent_30_days)
+
+        print("\n--- 预测完成 ---")
+        print("输入最近1天的价格(最后一行):", recent_30_days[0, -1, :].numpy())
+        print("预测未来5天的价格:\n", future_5_days_pred[0].numpy())
