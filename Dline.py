@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
+from torch.utils.data import Dataset, DataLoader
 
 
 class MovingAvgDecomp(nn.Module):
@@ -73,3 +74,21 @@ class DLinearForStock(nn.Module):
         x_out = x_out + seq_last
 
         return x_out
+class StockDataset(Dataset):
+    def __init__(self, data, seq_len, pred_len):
+        """
+        data: numpy array, 形状为 (总天数, 特征数)
+        """
+        self.data = torch.tensor(data, dtype=torch.float32)
+        self.seq_len = seq_len
+        self.pred_len = pred_len
+
+    def __len__(self):
+        return len(self.data) - self.seq_len - self.pred_len + 1
+
+    def __getitem__(self, index):
+        # 输入窗口：[index : index + seq_len]
+        x = self.data[index : index + self.seq_len]
+        # 预测窗口：[index + seq_len : index + seq_len + pred_len]
+        y = self.data[index + self.seq_len : index + self.seq_len + self.pred_len]
+        return x, y
